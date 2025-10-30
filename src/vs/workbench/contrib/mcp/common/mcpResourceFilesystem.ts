@@ -21,6 +21,7 @@ import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { McpServer } from './mcpServer.js';
 import { McpServerRequestHandler } from './mcpServerRequestHandler.js';
 import { IMcpService, McpCapability, McpResourceURI } from './mcpTypes.js';
+import { ValidateHttpResources } from './mcpTypesUtils.js';
 import { MCP } from './modelContextProtocol.js';
 
 const MOMENTARY_CACHE_DURATION = 3000;
@@ -283,6 +284,16 @@ export class McpResourceFilesystem extends Disposable implements IWorkbenchContr
 
 	private async _readURIInner(uri: URI, token?: CancellationToken): Promise<IReadData> {
 		const { resourceURI, server } = this._decodeURI(uri);
+		if (uri.scheme === 'http' || uri.scheme === 'https') {
+
+			if (uri.scheme === 'http') {
+				ValidateHttpResources(uri, this._mcpService.servers.get().find(s => s.definition.id === server.definition.id)?.definition.launch!);
+
+
+			}
+
+		}
+
 		const res = await McpServer.callOn(server, r => r.readResource({ uri: resourceURI.toString() }, token), token);
 		return {
 			contents: res.contents,

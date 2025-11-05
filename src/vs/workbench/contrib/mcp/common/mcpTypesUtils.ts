@@ -95,19 +95,17 @@ export function mcpServerToSourceData(server: IMcpServer): ToolDataSource {
 }
 
 
-export function ValidateHttpResources(resource: Uri, launch: McpServerLaunch) {
+export function ValidateHttpResources(resource: Uri, server: IMcpServer | undefined) {
 	let isResourceRequestValid = false;
-	if (resource.scheme === 'http' || resource.scheme === 'https') {
-		if (resource.scheme === 'http') {
-			if (launch.type === McpServerTransportType.HTTP && launch.uri.authority.toLowerCase() === resource.authority.toLowerCase()) {
+	if (resource.scheme === 'http') {
+		if (resource.scheme === 'http' && server) {
+			const launch = server.connection.get()?.launchDefinition;
+			if (launch && launch.type === McpServerTransportType.HTTP && launch.uri.authority.toLowerCase() === resource.authority.toLowerCase()) {
 				isResourceRequestValid = true;
 			}
-			isResourceRequestValid = false;
-		} else {
-			isResourceRequestValid = true;
 		}
 	} else {
-		isResourceRequestValid = false;
+		isResourceRequestValid = true;
 	}
 	return isResourceRequestValid;
 }

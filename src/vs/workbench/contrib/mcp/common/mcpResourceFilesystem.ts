@@ -283,13 +283,15 @@ export class McpResourceFilesystem extends Disposable implements IWorkbenchContr
 	}
 
 	private async _readURIInner(uri: URI, token?: CancellationToken): Promise<IReadData> {
+
+
+
 		const { resourceURI, server } = this._decodeURI(uri);
 		if (uri.scheme === 'http' || uri.scheme === 'https') {
 
 			if (uri.scheme === 'http') {
-				ValidateHttpResources(uri, this._mcpService.servers.get().find(s => s.definition.id === server.definition.id)?.definition.launch!);
-
-
+				const matchedServer = this._mcpService.servers.get().find(s => s.definition.id === server.definition.id);
+				ValidateHttpResources(uri, matchedServer);
 			}
 
 		}

@@ -15,6 +15,12 @@
 	            "args": [
 	                "C:\\Users\\dileepy\\servers\\src\\everything\\dist\\index.js"
 	            ],
+								"dev": {
+                    "watch": "src/**/*.ts",
+                    "debug": {
+                    "type": "node"
+                    }
+                },
 	            "env": {}
 	        },
 	        "my-mcp-server-612a332c": {
@@ -22,7 +28,13 @@
 	            "command": "node",
 	            "args": [
 	                "C:\\\\Users\\\\dileepy\\\\servers\\\\src\\\\everything\\\\dist\\\\index.js"
-	            ]
+	            ],
+				"dev": {
+                    "watch": "src/**/*.ts",
+                    "debug": {
+                    "type": "node"
+                    }
+                }
 	        }
 	    },
 	    "inputs": []

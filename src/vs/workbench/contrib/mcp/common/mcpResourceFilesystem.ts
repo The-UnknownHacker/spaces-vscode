@@ -17,6 +17,7 @@ import { equalsIgnoreCase } from '../../../../base/common/strings.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createFileSystemProviderError, FileChangeType, FileSystemProviderCapabilities, FileSystemProviderErrorCode, FileType, IFileChange, IFileDeleteOptions, IFileOverwriteOptions, IFileReadStreamOptions, IFileService, IFileSystemProviderWithFileAtomicReadCapability, IFileSystemProviderWithFileReadStreamCapability, IFileSystemProviderWithFileReadWriteCapability, IFileWriteOptions, IStat, IWatchOptions } from '../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IWebContentExtractorService } from '../../../../platform/webContentExtractor/common/webContentExtractor.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { McpServer } from './mcpServer.js';
 import { McpServerRequestHandler } from './mcpServerRequestHandler.js';
@@ -77,6 +78,7 @@ export class McpResourceFilesystem extends Disposable implements IWorkbenchContr
 	constructor(
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IFileService private readonly _fileService: IFileService,
+		@IWebContentExtractorService private readonly _webContentExtractorService: IWebContentExtractorService,
 	) {
 		super();
 		this._register(this._fileService.registerProvider(McpResourceURI.scheme, this));
@@ -283,17 +285,24 @@ export class McpResourceFilesystem extends Disposable implements IWorkbenchContr
 	}
 
 	private async _readURIInner(uri: URI, token?: CancellationToken): Promise<IReadData> {
-
-
-
 		const { resourceURI, server } = this._decodeURI(uri);
-		if (uri.scheme === 'http' || uri.scheme === 'https') {
-
-			if (uri.scheme === 'http') {
-				const matchedServer = this._mcpService.servers.get().find(s => s.definition.id === server.definition.id);
-				ValidateHttpResources(uri, matchedServer);
+		if (uri.path.indexOf('/http/') === 0 || uri.path.indexOf('/https/') === 0) {
+			const matchedServer = this._mcpService.servers.get().find(s => s.definition.id === server.definition.id);
+			if (ValidateHttpResources(uri, matchedServer)) {
+				const extractURI = URI.parse(resourceURI.toString());
+				const result = await this._webContentExtractorService.extract([extractURI], { followRedirects: false });
+				return {
+					contents: result.map(r => {
+						if (r.status === 'ok') {
+							return { uri: resourceURI.toString(), text: r.result };
+						} else {
+							return { uri: resourceURI.toString(), text: '' };
+						}
+					}),
+					resourceURI,
+					forSameURI: result.filter(r => r.status === 'ok').map(r => ({ uri: resourceURI.toString(), text: r.result }))
+				};
 			}
-
 		}
 
 		const res = await McpServer.callOn(server, r => r.readResource({ uri: resourceURI.toString() }, token), token);

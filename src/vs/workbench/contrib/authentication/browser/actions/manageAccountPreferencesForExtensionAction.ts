@@ -4,14 +4,19 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Event } from '../../../../../base/common/event.js';
+import { Lazy } from '../../../../../base/common/lazy.js';
 import { DisposableStore, IDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, MenuId } from '../../../../../platform/actions/common/actions.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
+import { IProductService } from '../../../../../platform/product/common/productService.js';
 import { IQuickInputService, IQuickPick, IQuickPickItem, QuickPickInput } from '../../../../../platform/quickinput/common/quickInput.js';
-import { AuthenticationSessionAccount, IAuthenticationService } from '../../../../services/authentication/common/authentication.js';
+import { ISecretStorageService } from '../../../../../platform/secrets/common/secrets.js';
+import { AuthenticationSessionInfo, getCurrentAuthenticationSessionInfo } from '../../../../services/authentication/browser/authenticationService.js';
+import { AuthenticationSessionAccount, IAuthenticationProvider, IAuthenticationService } from '../../../../services/authentication/common/authentication.js';
 import { IAuthenticationQueryService } from '../../../../services/authentication/common/authenticationQuery.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensions.js';
 
@@ -19,7 +24,7 @@ export class ManageAccountPreferencesForExtensionAction extends Action2 {
 	constructor() {
 		super({
 			id: '_manageAccountPreferencesForExtension',
-			title: localize2('manageAccountPreferenceForExtension', "Manage Extension Account Preferences..."),
+			title: localize2('manageAccountPreferenceForExtension', "Manage Account"),
 			category: localize2('accounts', "Accounts"),
 			f1: true,
 			menu: [{
@@ -48,6 +53,16 @@ interface ExistingAccountQuickPickItem extends IQuickPickItem {
 	providerId: string;
 }
 
+interface AccountQuickPickItem extends IQuickPickItem {
+	providerId: string;
+	canUseMcp: boolean;
+	canSignOut: () => Promise<boolean>;
+}
+
+interface AccountActionQuickPickItem extends IQuickPickItem {
+	action: () => void;
+}
+
 class ManageAccountPreferenceForExtensionActionImpl {
 	constructor(
 		@IAuthenticationService private readonly _authenticationService: IAuthenticationService,
@@ -55,10 +70,19 @@ class ManageAccountPreferenceForExtensionActionImpl {
 		@IDialogService private readonly _dialogService: IDialogService,
 		@IAuthenticationQueryService private readonly _authenticationQueryService: IAuthenticationQueryService,
 		@IExtensionService private readonly _extensionService: IExtensionService,
-		@ILogService private readonly _logService: ILogService
+		@ILogService private readonly _logService: ILogService,
+		@ICommandService private readonly _commandService: ICommandService,
+		@ISecretStorageService private readonly _secretStorageService: ISecretStorageService,
+		@IProductService private readonly _productService: IProductService
 	) { }
 
 	async run(extensionId?: string, providerId?: string) {
+		// If no parameters provided, show account settings directly
+		if (!extensionId && !providerId) {
+			return this._showAccountSettings();
+		}
+
+		// Original extension-specific logic
 		if (!extensionId) {
 			const extensions = this._extensionService.extensions
 				.filter(ext => this._authenticationQueryService.extension(ext.identifier.value).getAllAccountPreferences().size > 0)
@@ -69,7 +93,7 @@ class ManageAccountPreferenceForExtensionActionImpl {
 				id: ext.identifier.value
 			})), {
 				placeHolder: localize('selectExtension', "Select an extension to manage account preferences for"),
-				title: localize('pickAProviderTitle', "Manage Extension Account Preferences")
+				title: localize('pickAProviderTitle', "Manage Account")
 			});
 			extensionId = result?.id;
 		}
@@ -98,7 +122,7 @@ class ManageAccountPreferenceForExtensionActionImpl {
 					})),
 					{
 						placeHolder: localize('selectProvider', "Select an authentication provider to manage account preferences for"),
-						title: localize('pickAProviderTitle', "Manage Extension Account Preferences")
+						title: localize('pickAProviderTitle', "Manage Account")
 					}
 				);
 				if (!result) {
@@ -140,6 +164,92 @@ class ManageAccountPreferenceForExtensionActionImpl {
 		}
 		picker.items = items;
 		picker.show();
+	}
+
+	private async _showAccountSettings(): Promise<void> {
+		const placeHolder = localize('pickAccount', "Select an account to manage");
+
+		const accounts = await this._listAccounts();
+		if (!accounts.length) {
+			await this._quickInputService.pick([{ label: localize('noActiveAccounts', "There are no active accounts.") }], { placeHolder });
+			return;
+		}
+
+		const account = await this._quickInputService.pick(accounts, { placeHolder, matchOnDescription: true });
+		if (!account) {
+			return;
+		}
+
+		await this._showAccountActions(account);
+	}
+
+	private async _listAccounts(): Promise<AccountQuickPickItem[]> {
+		const activeSession = new Lazy(() => getCurrentAuthenticationSessionInfo(this._secretStorageService, this._productService));
+		const accounts: AccountQuickPickItem[] = [];
+		for (const providerId of this._authenticationService.getProviderIds()) {
+			const provider = this._authenticationService.getProvider(providerId);
+			for (const { label, id } of await this._authenticationService.getAccounts(providerId)) {
+				accounts.push({
+					label,
+					description: provider.label,
+					providerId,
+					canUseMcp: !!provider.authorizationServers?.length,
+					canSignOut: async () => this._canSignOut(provider, id, await activeSession.value)
+				});
+			}
+		}
+		return accounts;
+	}
+
+	private async _canSignOut(provider: IAuthenticationProvider, accountId: string, session?: AuthenticationSessionInfo): Promise<boolean> {
+		if (session && !session.canSignOut && session.providerId === provider.id) {
+			const sessions = await this._authenticationService.getSessions(provider.id);
+			return !sessions.some(o => o.id === session.id && o.account.id === accountId);
+		}
+		return true;
+	}
+
+	private async _showAccountActions(account: AccountQuickPickItem): Promise<void> {
+		const { providerId, label: accountLabel, canUseMcp, canSignOut } = account;
+
+		const store = new DisposableStore();
+		const quickPick = store.add(this._quickInputService.createQuickPick<AccountActionQuickPickItem>());
+
+		quickPick.title = localize('manageAccount', "Manage '{0}'", accountLabel);
+		quickPick.placeholder = localize('selectAction', "Select an action");
+
+		const items: AccountActionQuickPickItem[] = [{
+			label: localize('manageTrustedExtensions', "Manage Trusted Extensions"),
+			action: () => this._commandService.executeCommand('_manageTrustedExtensionsForAccount', { providerId, accountLabel })
+		}];
+
+		if (canUseMcp) {
+			items.push({
+				label: localize('manageTrustedMCPServers', "Manage Trusted MCP Servers"),
+				action: () => this._commandService.executeCommand('_manageTrustedMCPServersForAccount', { providerId, accountLabel })
+			});
+		}
+
+		if (await canSignOut()) {
+			items.push({
+				label: localize('signOut', "Sign Out"),
+				action: () => this._commandService.executeCommand('_signOutOfAccount', { providerId, accountLabel })
+			});
+		}
+
+		quickPick.items = items;
+
+		store.add(quickPick.onDidAccept(() => {
+			const selected = quickPick.selectedItems[0];
+			if (selected) {
+				quickPick.hide();
+				selected.action();
+			}
+		}));
+
+		store.add(quickPick.onDidHide(() => store.dispose()));
+
+		quickPick.show();
 	}
 
 	private _createQuickPick(disposableStore: DisposableStore, extensionId: string, extensionLabel: string, providerLabel: string) {

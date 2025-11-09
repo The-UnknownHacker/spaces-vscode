@@ -240,9 +240,9 @@ app.on('ready', () => {
 		return {
 			product: {
 				version: '1.x.y',
-				nameShort: 'Code - OSS Dev',
-				nameLong: 'Code - OSS Dev',
-				applicationName: 'code-oss',
+				nameShort: 'Spaces',
+				nameLong: 'Hackclub Spaces',
+				applicationName: 'Spaces',
 				dataFolderName: '.vscode-oss',
 				urlProtocol: 'code-oss',
 			}

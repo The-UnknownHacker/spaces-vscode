@@ -1,0 +1,62 @@
+# Ignore files that don't need to be in the Docker build context
+# This speeds up the build process significantly
+
+# Node modules (will be installed in container)
+node_modules/
+**/node_modules/
+
+# Build outputs
+.build/
+out/
+out-*/
+*.vsix
+
+# Git
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker files (don't need these in the build)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation (not needed for build)
+*.md
+!README.md
+
+# Workspace data
+workspace/
+
+# Dev container
+.devcontainer/
+
+# CI/CD
+.github/

@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  custom-code-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.code-server
+    container_name: custom-vscode-server
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist user data
+      - ./workspace:/home/coder/workspace
+      - code-server-config:/home/coder/.config
+      - code-server-local:/home/coder/.local
+    environment:
+      - PASSWORD=${CODE_SERVER_PASSWORD:-changeme}
+      # Optional: disable password and use token instead
+      # - PASSWORD=
+      # - HASHED_PASSWORD=
+    restart: unless-stopped
+
+volumes:
+  code-server-config:
+  code-server-local:

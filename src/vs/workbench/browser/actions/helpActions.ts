@@ -338,7 +338,7 @@ class AskVSCodeCopilot extends Action2 {
 	constructor() {
 		super({
 			id: AskVSCodeCopilot.ID,
-			title: localize2('askVScode', 'Ask @vscode'),
+			title: localize2('askVScode', 'Ask Spaces'),
 			category: Categories.Help,
 			f1: true,
 			precondition: ContextKeyExpr.equals('chatSetupHidden', false)
@@ -354,7 +354,7 @@ class AskVSCodeCopilot extends Action2 {
 MenuRegistry.appendMenuItem(MenuId.MenubarHelpMenu, {
 	command: {
 		id: AskVSCodeCopilot.ID,
-		title: localize2('askVScode', 'Ask @vscode'),
+		title: localize2('askVScode', 'Ask Spaces'),
 	},
 	order: 7,
 	group: '1_welcome',
